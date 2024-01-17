@@ -22,7 +22,7 @@ require (
 	golang.org/x/sync v0.6.0
 	weavelab.xyz/river/riverdriver v0.0.15
 	weavelab.xyz/river/riverdriver/riverdatabasesql v0.0.0-00010101000000-000000000000
-	weavelab.xyz/river/riverdriver/riverpgxv5 v0.0.12
+	weavelab.xyz/river/riverdriver/riverpgxv5 v0.0.0-00010101000000-000000000000
 )
 
 require (
