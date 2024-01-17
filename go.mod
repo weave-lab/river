@@ -20,20 +20,19 @@ require (
 	golang.org/x/exp v0.0.0-20230522175609-2e198f4a06a1
 	golang.org/x/mod v0.14.0
 	golang.org/x/sync v0.6.0
-	weavelab.xyz/river/riverdriver v0.0.15
+	weavelab.xyz/river/riverdriver v0.0.0-00010101000000-000000000000
 	weavelab.xyz/river/riverdriver/riverdatabasesql v0.0.0-00010101000000-000000000000
-	weavelab.xyz/river/riverdriver/riverpgxv5 v0.0.0-00010101000000-000000000000
 )
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
-	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
+	github.com/jackc/pgservicefile v0.0.0-20231201235250-de7065d80cb9 // indirect
 	github.com/lib/pq v1.10.9 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
-	golang.org/x/crypto v0.17.0 // indirect
+	golang.org/x/crypto v0.18.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
