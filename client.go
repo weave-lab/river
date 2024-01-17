@@ -8,28 +8,27 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"reflect"
 	"regexp"
 	"sync"
 	"time"
 
 	"github.com/oklog/ulid/v2"
 
-	"github.com/riverqueue/river/internal/baseservice"
-	"github.com/riverqueue/river/internal/componentstatus"
-	"github.com/riverqueue/river/internal/dbadapter"
-	"github.com/riverqueue/river/internal/dbsqlc"
-	"github.com/riverqueue/river/internal/jobcompleter"
-	"github.com/riverqueue/river/internal/jobstats"
-	"github.com/riverqueue/river/internal/leadership"
-	"github.com/riverqueue/river/internal/maintenance"
-	"github.com/riverqueue/river/internal/notifier"
-	"github.com/riverqueue/river/internal/rivercommon"
-	"github.com/riverqueue/river/internal/util/sliceutil"
-	"github.com/riverqueue/river/internal/util/valutil"
-	"github.com/riverqueue/river/internal/workunit"
-	"github.com/riverqueue/river/riverdriver"
-	"github.com/riverqueue/river/rivertype"
+	"weavelab.xyz/river/internal/baseservice"
+	"weavelab.xyz/river/internal/componentstatus"
+	"weavelab.xyz/river/internal/dbadapter"
+	"weavelab.xyz/river/internal/dbsqlc"
+	"weavelab.xyz/river/internal/jobcompleter"
+	"weavelab.xyz/river/internal/jobstats"
+	"weavelab.xyz/river/internal/leadership"
+	"weavelab.xyz/river/internal/maintenance"
+	"weavelab.xyz/river/internal/notifier"
+	"weavelab.xyz/river/internal/rivercommon"
+	"weavelab.xyz/river/internal/util/sliceutil"
+	"weavelab.xyz/river/internal/util/valutil"
+	"weavelab.xyz/river/internal/workunit"
+	"weavelab.xyz/river/riverdriver"
+	"weavelab.xyz/river/rivertype"
 )
 
 const (
@@ -332,8 +331,8 @@ var (
 // but it can be omitted because it'll generally always be inferred from the
 // driver. For example:
 //
-//	import "github.com/riverqueue/river"
-//	import "github.com/riverqueue/river/riverdriver/riverpgxv5"
+//	import "weavelab.xyz/river"
+//	import "weavelab.xyz/river/riverdriver/riverpgxv5"
 //
 //	...
 //
@@ -438,7 +437,7 @@ func NewClient[TTx any](driver riverdriver.Driver[TTx], config *Config) (*Client
 	}
 
 	baseservice.Init(archetype, &client.baseService)
-	client.baseService.Name = reflect.TypeOf(Client[TTx]{}).Name() // Have to correct the name because base service isn't embedded like it usually is
+	client.baseService.Name = "Client" // Have to correct the name because base service isn't embedded like it usually is
 
 	// There are a number of internal components that are only needed/desired if
 	// we're actually going to be working jobs (as opposed to just enqueueing
@@ -940,10 +939,10 @@ func (c *Client[TTx]) runProducers(fetchNewWorkCtx, workCtx context.Context) {
 	}
 }
 
-// Cancel cancels the job with the given ID. If possible, the job is cancelled
-// immediately and will not be retried. The provided context is used for the
-// underlying Postgres update and can be used to cancel the operation or apply a
-// timeout.
+// JobCancel cancels the job with the given ID. If possible, the job is
+// cancelled immediately and will not be retried. The provided context is used
+// for the underlying Postgres update and can be used to cancel the operation or
+// apply a timeout.
 //
 // If the job is still in the queue (available, scheduled, or retryable), it is
 // immediately marked as cancelled and will not be retried.
@@ -976,7 +975,7 @@ func (c *Client[TTx]) runProducers(fetchNewWorkCtx, workCtx context.Context) {
 //
 // Returns the up-to-date JobRow for the specified jobID if it exists. Returns
 // ErrNotFound if the job doesn't exist.
-func (c *Client[TTx]) Cancel(ctx context.Context, jobID int64) (*rivertype.JobRow, error) {
+func (c *Client[TTx]) JobCancel(ctx context.Context, jobID int64) (*rivertype.JobRow, error) {
 	job, err := c.adapter.JobCancel(ctx, jobID)
 	if err != nil {
 		if errors.Is(err, riverdriver.ErrNoRows) {
@@ -988,10 +987,11 @@ func (c *Client[TTx]) Cancel(ctx context.Context, jobID int64) (*rivertype.JobRo
 	return dbsqlc.JobRowFromInternal(job), nil
 }
 
-// CancelTx cancels the job with the given ID within the specified transaction.
-// This variant lets a caller cancel a job atomically alongside other database
-// changes. An cancelled job doesn't take effect until the transaction commits,
-// and if the transaction rolls back, so too is the cancelled job.
+// JobCancelTx cancels the job with the given ID within the specified
+// transaction. This variant lets a caller cancel a job atomically alongside
+// other database changes. An cancelled job doesn't take effect until the
+// transaction commits, and if the transaction rolls back, so too is the
+// cancelled job.
 //
 // If possible, the job is cancelled immediately and will not be retried. The
 // provided context is used for the underlying Postgres update and can be used
@@ -1028,7 +1028,7 @@ func (c *Client[TTx]) Cancel(ctx context.Context, jobID int64) (*rivertype.JobRo
 //
 // Returns the up-to-date JobRow for the specified jobID if it exists. Returns
 // ErrNotFound if the job doesn't exist.
-func (c *Client[TTx]) CancelTx(ctx context.Context, tx TTx, jobID int64) (*rivertype.JobRow, error) {
+func (c *Client[TTx]) JobCancelTx(ctx context.Context, tx TTx, jobID int64) (*rivertype.JobRow, error) {
 	job, err := c.adapter.JobCancelTx(ctx, c.driver.UnwrapTx(tx), jobID)
 	if errors.Is(err, riverdriver.ErrNoRows) {
 		return nil, ErrNotFound
