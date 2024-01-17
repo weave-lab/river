@@ -17,11 +17,11 @@ require (
 	github.com/spf13/cobra v1.8.0
 	github.com/stretchr/testify v1.8.4
 	go.uber.org/goleak v1.3.0
-	golang.org/x/exp v0.0.0-20230522175609-2e198f4a06a1
+	golang.org/x/exp v0.0.0-20240112132812-db7319d0e0e3
 	golang.org/x/mod v0.14.0
 	golang.org/x/sync v0.6.0
-	weavelab.xyz/river/riverdriver v0.0.0-00010101000000-000000000000
-	weavelab.xyz/river/riverdriver/riverdatabasesql v0.0.0-00010101000000-000000000000
+	weavelab.xyz/river/riverdriver v0.0.0-20240117155135-5e3c1bf0610f
+	weavelab.xyz/river/riverdriver/riverdatabasesql v0.0.0-20240117155135-5e3c1bf0610f
 )
 
 require (
