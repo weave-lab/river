@@ -21,6 +21,7 @@ import (
 	"weavelab.xyz/river/internal/util/dbutil"
 	"weavelab.xyz/river/internal/util/maputil"
 	"weavelab.xyz/river/internal/util/sliceutil"
+	"weavelab.xyz/river/internal/util/valutil"
 	"weavelab.xyz/river/riverdriver"
 )
 
