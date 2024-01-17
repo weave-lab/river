@@ -7,7 +7,7 @@ replace weavelab.xyz/river/riverdriver => ../
 require (
 	github.com/jackc/pgx/v5 v5.5.2
 	github.com/stretchr/testify v1.8.1
-	weavelab.xyz/river/riverdriver v0.0.0-20240117155135-5e3c1bf0610f
+	weavelab.xyz/river/riverdriver v0.0.0-20240117160100-c5536db5b563
 )
 
 require (
