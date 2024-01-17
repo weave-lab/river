@@ -21,8 +21,8 @@ require (
 	golang.org/x/mod v0.14.0
 	golang.org/x/sync v0.6.0
 	weavelab.xyz/river/riverdriver v0.0.15
-	weavelab.xyz/river/riverdriver/riverdatabasesql v0.0.15
-	weavelab.xyz/river/riverdriver/riverpgxv5 v0.0.15
+	weavelab.xyz/river/riverdriver/riverdatabasesql v0.0.16
+	weavelab.xyz/river/riverdriver/riverpgxv5 v0.0.16
 )
 
 require (
