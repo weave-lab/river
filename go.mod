@@ -20,7 +20,7 @@ require (
 	golang.org/x/exp v0.0.0-20230522175609-2e198f4a06a1
 	golang.org/x/mod v0.14.0
 	golang.org/x/sync v0.6.0
-	weavelab.xyz/river/riverdriver v0.0.15
+	weavelab.xyz/river/riverdriver v0.0.16
 	weavelab.xyz/river/riverdriver/riverdatabasesql v0.0.16
 	weavelab.xyz/river/riverdriver/riverpgxv5 v0.0.16
 )
