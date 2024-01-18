@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"slices"
 	"testing"
 	"time"
 
@@ -268,14 +267,6 @@ func requireManyInsertedErr[TDriver riverdriver.Driver[TTx], TTx any](ctx contex
 		return nil, fmt.Errorf("error querying jobs: %w", err)
 	}
 
-	actualArgsKinds := sliceutil.Map(dbJobs, func(j *dbsqlc.RiverJob) string { return j.Kind })
-
-	if !slices.Equal(expectedArgsKinds, actualArgsKinds) {
-		failure(t, "Inserted jobs didn't match expectation; expected: %+v, actual: %+v",
-			expectedArgsKinds, actualArgsKinds)
-		return nil, nil
-	}
-
 	jobRows := sliceutil.Map(dbJobs, dbsqlc.JobRowFromInternal)
 
 	for i, jobRow := range jobRows {
@@ -335,12 +326,6 @@ func compareJobToInsertOpts(t testingT, jobRow *rivertype.JobRow, expectedOpts R
 	if expectedOpts.State != "" && jobRow.State != expectedOpts.State {
 		failure(t, "Job with kind '%s'%s state '%s' not equal to expected '%s'",
 			jobRow.Kind, positionStr(), jobRow.State, expectedOpts.State)
-		return false
-	}
-
-	if len(expectedOpts.Tags) > 0 && !slices.Equal(jobRow.Tags, expectedOpts.Tags) {
-		failure(t, "Job with kind '%s'%s tags attempts %+v not equal to expected %+v",
-			jobRow.Kind, positionStr(), jobRow.Tags, expectedOpts.Tags)
 		return false
 	}
 

@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"slices"
+	"golang.org/x/exp/slices"
 	"sync"
 	"testing"
 	"time"

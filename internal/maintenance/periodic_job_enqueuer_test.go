@@ -3,8 +3,8 @@ package maintenance
 import (
 	"context"
 	"fmt"
+	"golang.org/x/exp/slices"
 	"math/rand"
-	"slices"
 	"testing"
 	"time"
 

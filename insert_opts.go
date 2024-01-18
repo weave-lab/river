@@ -3,7 +3,6 @@ package river
 import (
 	"errors"
 	"fmt"
-	"slices"
 	"time"
 
 	"weavelab.xyz/river/rivertype"
@@ -148,8 +147,10 @@ func (o *UniqueOpts) validate() error {
 		// This could be turned to a map lookup, but last I checked the speed
 		// difference for tiny slice sizes is negligible, and map lookup might
 		// even be slower.
-		if !slices.Contains(jobStateAll, state) {
-			return fmt.Errorf("JobUniqueOpts.ByState contains invalid state %q", state)
+		for _, jobState := range jobStateAll {
+			if state == jobState {
+				return fmt.Errorf("JobUniqueOpts.ByState contains invalid state %q", state)
+			}
 		}
 	}
 

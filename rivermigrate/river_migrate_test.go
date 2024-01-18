@@ -3,7 +3,7 @@ package rivermigrate
 import (
 	"context"
 	"database/sql"
-	"slices"
+	"golang.org/x/exp/slices"
 	"testing"
 	"weavelab.xyz/monorail/shared/wlib/wlog"
 

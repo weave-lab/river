@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"slices"
 	"strings"
 	"time"
 
@@ -275,8 +274,10 @@ func (a *StandardAdapter) JobInsertTx(ctx context.Context, tx pgx.Tx, params *Jo
 
 				advisoryLockHash.Write([]byte("&state=" + strings.Join(stateSet, ",")))
 
-				if !slices.Contains(stateSet, string(params.State)) {
-					return nil, nil, false
+				for _, state := range stateSet {
+					if state == string(params.State) {
+						return nil, nil, false
+					}
 				}
 
 				getParams.ByState = true
