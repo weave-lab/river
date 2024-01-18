@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"time"
+	"weavelab.xyz/monorail/shared/wlib/werror"
 
 	"weavelab.xyz/river/internal/baseservice"
 	"weavelab.xyz/river/internal/dbadapter"
@@ -101,8 +102,8 @@ func (s *PeriodicJobEnqueuer) Start(ctx context.Context) error {
 		// races.
 		defer close(stopped)
 
-		s.Logger.InfoContext(ctx, s.Name+logPrefixRunLoopStarted)
-		defer s.Logger.InfoContext(ctx, s.Name+logPrefixRunLoopStopped)
+		s.Logger.InfoC(ctx, s.Name+logPrefixRunLoopStarted)
+		defer s.Logger.InfoC(ctx, s.Name+logPrefixRunLoopStopped)
 
 		// An initial loop to assign next runs for every configured job and
 		// queues any jobs that should run immediately.
@@ -185,8 +186,7 @@ func (s *PeriodicJobEnqueuer) insertBatch(ctx context.Context, insertParamsMany 
 	}
 
 	if _, err := s.dbAdapter.JobInsertMany(ctx, insertParamsMany); err != nil {
-		s.Logger.ErrorContext(ctx, s.Name+": Error inserting periodic jobs",
-			"error", err.Error(), "num_jobs", len(insertParamsMany))
+		s.Logger.WErrorC(ctx, werror.Wrap(err, s.Name+": Error inserting periodic jobs").Add("num_jobs", len(insertParamsMany)))
 	}
 	s.TestSignals.InsertedJobs.Signal(struct{}{})
 }
@@ -195,11 +195,11 @@ func (s *PeriodicJobEnqueuer) insertParamsFromConstructor(ctx context.Context, c
 	job, err := constructorFunc()
 	if err != nil {
 		if errors.Is(err, ErrNoJobToInsert) {
-			s.Logger.InfoContext(ctx, s.Name+": nil returned from periodic job constructor, skipping")
+			s.Logger.InfoC(ctx, s.Name+": nil returned from periodic job constructor, skipping")
 			s.TestSignals.SkippedJob.Signal(struct{}{})
 			return nil, false
 		}
-		s.Logger.ErrorContext(ctx, s.Name+": Internal error generating periodic job", "error", err.Error())
+		s.Logger.WErrorC(ctx, werror.Wrap(err, s.Name+": Internal error generating periodic job"))
 		return nil, false
 	}
 

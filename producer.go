@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log/slog"
 	"sync/atomic"
 	"time"
+	"weavelab.xyz/monorail/shared/wlib/werror"
 
+	"weavelab.xyz/monorail/shared/wlib/wlog/tag"
 	"weavelab.xyz/river/internal/baseservice"
 	"weavelab.xyz/river/internal/componentstatus"
 	"weavelab.xyz/river/internal/dbadapter"
@@ -144,9 +145,9 @@ type producerStatusUpdateFunc func(queue string, status componentstatus.Status)
 // jobs. When workCtx is cancelled, any in-progress jobs will have their
 // contexts cancelled too.
 func (p *producer) Run(fetchCtx, workCtx context.Context, statusFunc producerStatusUpdateFunc) {
-	p.Logger.InfoContext(workCtx, p.Name+": Producer started", slog.String("queue", p.config.QueueName))
+	p.Logger.InfoC(workCtx, p.Name+": Producer started", tag.String("queue", p.config.QueueName))
 	defer func() {
-		p.Logger.InfoContext(workCtx, p.Name+": Producer stopped", slog.String("queue", p.config.QueueName), slog.Uint64("num_completed_jobs", p.numJobsRan.Load()))
+		p.Logger.InfoC(workCtx, p.Name+": Producer stopped", tag.String("queue", p.config.QueueName), tag.Int64("num_completed_jobs", int64(p.numJobsRan.Load())))
 	}()
 
 	go p.heartbeatLogLoop(fetchCtx)
@@ -158,21 +159,21 @@ func (p *producer) Run(fetchCtx, workCtx context.Context, statusFunc producerSta
 	handleJobControlNotification := func(topic notifier.NotificationTopic, payload string) {
 		var decoded jobControlPayload
 		if err := json.Unmarshal([]byte(payload), &decoded); err != nil {
-			p.Logger.ErrorContext(workCtx, p.Name+": Failed to unmarshal job control notification payload", slog.String("err", err.Error()))
+			p.Logger.WErrorC(workCtx, werror.Wrap(err, p.Name+": Failed to unmarshal job control notification payload"))
 			return
 		}
 		if string(decoded.Action) == string(jobControlActionCancel) && decoded.Queue == p.config.QueueName && decoded.JobID > 0 {
 			select {
 			case p.cancelCh <- decoded.JobID:
 			default:
-				p.Logger.WarnContext(workCtx, p.Name+": Job cancel notification dropped due to full buffer", slog.Int64("job_id", decoded.JobID))
+				p.Logger.WarnC(workCtx, p.Name+": Job cancel notification dropped due to full buffer", tag.Int64("job_id", decoded.JobID))
 			}
 			return
 		}
-		p.Logger.DebugContext(workCtx, p.Name+": Received job control notification with unknown action or other queue",
-			slog.String("action", string(decoded.Action)),
-			slog.Int64("job_id", decoded.JobID),
-			slog.String("queue", decoded.Queue),
+		p.Logger.DebugC(workCtx, p.Name+": Received job control notification with unknown action or other queue",
+			tag.String("action", string(decoded.Action)),
+			tag.Int64("job_id", decoded.JobID),
+			tag.String("queue", decoded.Queue),
 		)
 	}
 	sub := p.config.Notifier.Listen(notifier.NotificationTopicJobControl, handleJobControlNotification)
@@ -201,8 +202,8 @@ type insertPayload struct {
 }
 
 func (p *producer) fetchAndRunLoop(fetchCtx, workCtx context.Context, fetchLimiter *chanutil.DebouncedChan, statusFunc producerStatusUpdateFunc) {
-	p.Logger.InfoContext(workCtx, p.Name+": Run loop started")
-	defer p.Logger.InfoContext(workCtx, p.Name+": Run loop stopped")
+	p.Logger.InfoC(workCtx, p.Name+": Run loop started")
+	defer p.Logger.InfoC(workCtx, p.Name+": Run loop stopped")
 
 	// Prime the fetchLimiter so we can make an initial fetch without waiting for
 	// an insert notification or a fetch poll.
@@ -211,13 +212,13 @@ func (p *producer) fetchAndRunLoop(fetchCtx, workCtx context.Context, fetchLimit
 	handleInsertNotification := func(topic notifier.NotificationTopic, payload string) {
 		var decoded insertPayload
 		if err := json.Unmarshal([]byte(payload), &decoded); err != nil {
-			p.Logger.ErrorContext(workCtx, p.Name+": Failed to unmarshal insert notification payload", slog.String("err", err.Error()))
+			p.Logger.WErrorC(workCtx, werror.Wrap(err, p.Name+": Failed to unmarshal insert notification payload"))
 			return
 		}
 		if decoded.Queue != p.config.QueueName {
 			return
 		}
-		p.Logger.DebugContext(workCtx, p.Name+": Received insert notification", slog.String("queue", decoded.Queue))
+		p.Logger.DebugC(workCtx, p.Name+": Received insert notification", tag.String("queue", decoded.Queue))
 		fetchLimiter.Call()
 	}
 	sub := p.config.Notifier.Listen(notifier.NotificationTopicInsert, handleInsertNotification)
@@ -270,7 +271,7 @@ func (p *producer) innerFetchLoop(workCtx context.Context, fetchResultCh chan pr
 		select {
 		case result := <-fetchResultCh:
 			if result.err != nil {
-				p.Logger.ErrorContext(workCtx, p.Name+": Error fetching jobs", slog.String("err", result.err.Error()))
+				p.Logger.WErrorC(workCtx, werror.Wrap(result.err, p.Name+": Error fetching jobs"))
 			} else if len(result.jobs) > 0 {
 				p.startNewExecutors(workCtx, result.jobs)
 			}
@@ -340,10 +341,10 @@ func (p *producer) heartbeatLogLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			p.Logger.InfoContext(ctx, p.Name+": Heartbeat",
-				slog.Uint64("num_completed_jobs", p.numJobsRan.Load()),
-				slog.Int("num_jobs_running", int(p.numJobsActive.Load())),
-				slog.String("queue", p.config.QueueName),
+			p.Logger.InfoC(ctx, p.Name+": Heartbeat",
+				tag.Int64("num_completed_jobs", int64(p.numJobsRan.Load())),
+				tag.Int("num_jobs_running", int(p.numJobsActive.Load())),
+				tag.String("queue", p.config.QueueName),
 			)
 		}
 	}

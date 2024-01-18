@@ -8,6 +8,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	"weavelab.xyz/monorail/shared/wlib/wlog/tag"
 	"weavelab.xyz/river/internal/baseservice"
 	"weavelab.xyz/river/internal/dbadapter"
 	"weavelab.xyz/river/internal/dbsqlc"
@@ -203,7 +204,7 @@ func withRetries(c *baseservice.BaseService, f func(ctx context.Context) (*dbsql
 			sleepDuration := timeutil.SecondsAsDuration(retrySeconds(attempt))
 			// TODO: this logger doesn't use the user-provided context because it's
 			// not currently available here. It should.
-			c.Logger.Error(c.Name+": Completer error (will retry)", "attempt", attempt, "err", err, "sleep_duration", sleepDuration)
+			c.Logger.Error(c.Name+": Completer error (will retry)", tag.Int("attempt", attempt), tag.String("err", err.Error()), tag.Duration("sleep_duration", sleepDuration))
 			c.CancellableSleep(context.Background(), sleepDuration)
 			continue
 		}

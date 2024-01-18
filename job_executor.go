@@ -5,9 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"runtime/debug"
 	"time"
+	"weavelab.xyz/monorail/shared/wlib/werror"
+	"weavelab.xyz/monorail/shared/wlib/wlog/tag"
 
 	"weavelab.xyz/river/internal/baseservice"
 	"weavelab.xyz/river/internal/dbadapter"
@@ -134,7 +135,7 @@ type jobExecutor struct {
 }
 
 func (e *jobExecutor) Cancel() {
-	e.Logger.Warn(e.Name+": job cancelled remotely", slog.Int64("job_id", e.JobRow.ID))
+	e.Logger.WarnC(context.Background(), e.Name+": job cancelled remotely", tag.Int64("job_id", e.JobRow.ID))
 	e.CancelFunc(ErrJobCancelledRemotely)
 }
 
@@ -162,12 +163,7 @@ func (e *jobExecutor) Execute(ctx context.Context) {
 func (e *jobExecutor) execute(ctx context.Context) (res *jobExecutorResult) {
 	defer func() {
 		if recovery := recover(); recovery != nil {
-			e.Logger.ErrorContext(ctx, e.Name+": panic recovery; possible bug with Worker",
-				slog.Int64("job_id", e.JobRow.ID),
-				slog.String("kind", e.JobRow.Kind),
-				slog.String("panic_val", fmt.Sprintf("%v", recovery)),
-			)
-
+			e.Logger.WErrorC(ctx, werror.New(e.Name+": panic recovery; possible bug with Worker").Add("job_id", e.JobRow.ID).Add("kind", e.JobRow.Kind).Add("panic_val", fmt.Sprintf("%v", recovery)))
 			res = &jobExecutorResult{
 				PanicTrace: debug.Stack(),
 				PanicVal:   recovery,
@@ -177,10 +173,7 @@ func (e *jobExecutor) execute(ctx context.Context) (res *jobExecutorResult) {
 	}()
 
 	if e.WorkUnit == nil {
-		e.Logger.ErrorContext(ctx, e.Name+": Unhandled job kind",
-			slog.String("kind", e.JobRow.Kind),
-			slog.Int64("job_id", e.JobRow.ID),
-		)
+		e.Logger.WErrorC(ctx, werror.New(e.Name+": Unhandled job kind").Add("kind", e.JobRow.Kind).Add("job_id", e.JobRow.ID))
 		return &jobExecutorResult{Err: &UnknownJobKindError{Kind: e.JobRow.Kind}}
 	}
 
@@ -209,10 +202,7 @@ func (e *jobExecutor) invokeErrorHandler(ctx context.Context, res *jobExecutorRe
 	invokeAndHandlePanic := func(funcName string, errorHandler func() *ErrorHandlerResult) *ErrorHandlerResult {
 		defer func() {
 			if panicVal := recover(); panicVal != nil {
-				e.Logger.ErrorContext(ctx, e.Name+": ErrorHandler invocation panicked",
-					slog.String("function_name", funcName),
-					slog.String("panic_val", fmt.Sprintf("%v", panicVal)),
-				)
+				e.Logger.WErrorC(ctx, werror.New(e.Name+": ErrorHandler invocation panicked").Add("function_name", funcName).Add("panic_val", fmt.Sprintf("%v", panicVal)))
 			}
 		}()
 
@@ -239,15 +229,13 @@ func (e *jobExecutor) reportResult(ctx context.Context, res *jobExecutorResult) 
 	var snoozeErr *jobSnoozeError
 
 	if res.Err != nil && errors.As(res.Err, &snoozeErr) {
-		e.Logger.InfoContext(ctx, e.Name+": Job snoozed",
-			slog.Int64("job_id", e.JobRow.ID),
-			slog.Duration("duration", snoozeErr.duration),
+		e.Logger.InfoC(ctx, e.Name+": Job snoozed",
+			tag.Int64("job_id", e.JobRow.ID),
+			tag.Duration("duration", snoozeErr.duration),
 		)
 		nextAttemptScheduledAt := time.Now().Add(snoozeErr.duration)
 		if err := e.Completer.JobSetStateIfRunning(e.stats, dbadapter.JobSetStateSnoozed(e.JobRow.ID, nextAttemptScheduledAt, e.JobRow.MaxAttempts+1)); err != nil {
-			e.Logger.ErrorContext(ctx, e.Name+": Error snoozing job",
-				slog.Int64("job_id", e.JobRow.ID),
-			)
+			e.Logger.WErrorC(ctx, werror.Wrap(err, e.Name+": Error snoozing job").Add("job_id", e.JobRow.ID))
 		}
 		return
 	}
@@ -258,10 +246,7 @@ func (e *jobExecutor) reportResult(ctx context.Context, res *jobExecutorResult) 
 	}
 
 	if err := e.Completer.JobSetStateIfRunning(e.stats, dbadapter.JobSetStateCompleted(e.JobRow.ID, e.TimeNowUTC())); err != nil {
-		e.Logger.ErrorContext(ctx, e.Name+": Error completing job",
-			slog.String("err", err.Error()),
-			slog.Int64("job_id", e.JobRow.ID),
-		)
+		e.Logger.WErrorC(ctx, werror.Wrap(err, e.Name+": Error completing job").Add("job_id", e.JobRow.ID))
 		return
 	}
 }
@@ -272,19 +257,19 @@ func (e *jobExecutor) reportError(ctx context.Context, res *jobExecutorResult) {
 		cancelErr *jobCancelError
 	)
 
-	logAttrs := []any{
-		slog.String("error", res.ErrorStr()),
-		slog.Int64("job_id", e.JobRow.ID),
+	logAttrs := []tag.Tag{
+		tag.String("error", res.ErrorStr()),
+		tag.Int64("job_id", e.JobRow.ID),
 	}
 
 	switch {
 	case errors.As(res.Err, &cancelErr):
 		cancelJob = true
-		e.Logger.InfoContext(ctx, e.Name+": Job cancelled explicitly", logAttrs...)
+		e.Logger.InfoC(ctx, e.Name+": Job cancelled explicitly", logAttrs...)
 	case res.Err != nil:
-		e.Logger.ErrorContext(ctx, e.Name+": Job errored", logAttrs...)
+		e.Logger.WErrorC(ctx, werror.Wrap(res.Err, e.Name+": Job errored").Add("job_id", e.JobRow.ID))
 	case res.PanicVal != nil:
-		e.Logger.ErrorContext(ctx, e.Name+": Job panicked", logAttrs...)
+		e.Logger.WErrorC(ctx, werror.Wrap(res.Err, e.Name+": Job panicked").Add("job_id", e.JobRow.ID))
 	}
 
 	if e.ErrorHandler != nil && !cancelJob {
@@ -301,7 +286,7 @@ func (e *jobExecutor) reportError(ctx context.Context, res *jobExecutorResult) {
 
 	errData, err := json.Marshal(attemptErr)
 	if err != nil {
-		e.Logger.ErrorContext(ctx, e.Name+": Failed to marshal attempt error", logAttrs...)
+		e.Logger.WErrorC(ctx, werror.Wrap(err, e.Name+": Failed to marshal attempt error").Add("job_id", e.JobRow.ID))
 		return
 	}
 
@@ -309,14 +294,14 @@ func (e *jobExecutor) reportError(ctx context.Context, res *jobExecutorResult) {
 
 	if cancelJob {
 		if err := e.Completer.JobSetStateIfRunning(e.stats, dbadapter.JobSetStateCancelled(e.JobRow.ID, now, errData)); err != nil {
-			e.Logger.ErrorContext(ctx, e.Name+": Failed to cancel job and report error", logAttrs...)
+			e.Logger.WErrorC(ctx, werror.Wrap(err, e.Name+": Failed to cancel job and report error").Add("job_id", e.JobRow.ID))
 		}
 		return
 	}
 
 	if e.JobRow.Attempt >= e.JobRow.MaxAttempts {
 		if err := e.Completer.JobSetStateIfRunning(e.stats, dbadapter.JobSetStateDiscarded(e.JobRow.ID, now, errData)); err != nil {
-			e.Logger.ErrorContext(ctx, e.Name+": Failed to discard job and report error", logAttrs...)
+			e.Logger.WErrorC(ctx, werror.Wrap(err, e.Name+": Failed to discard job and report error").Add("job_id", e.JobRow.ID))
 		}
 		return
 	}
@@ -329,10 +314,10 @@ func (e *jobExecutor) reportError(ctx context.Context, res *jobExecutorResult) {
 		nextRetryScheduledAt = e.ClientRetryPolicy.NextRetry(e.JobRow)
 	}
 	if nextRetryScheduledAt.Before(now) {
-		e.Logger.WarnContext(ctx,
+		e.Logger.WarnC(ctx,
 			e.Name+": Retry policy returned invalid next retry before current time; using default retry policy instead",
-			slog.Time("next_retry_scheduled_at", nextRetryScheduledAt),
-			slog.Time("now", now),
+			tag.Any("next_retry_scheduled_at", nextRetryScheduledAt),
+			tag.Any("now", now),
 		)
 		nextRetryScheduledAt = (&DefaultClientRetryPolicy{}).NextRetry(e.JobRow)
 	}
@@ -350,6 +335,6 @@ func (e *jobExecutor) reportError(ctx context.Context, res *jobExecutorResult) {
 		params = dbadapter.JobSetStateErrorRetryable(e.JobRow.ID, nextRetryScheduledAt, errData)
 	}
 	if err := e.Completer.JobSetStateIfRunning(e.stats, params); err != nil {
-		e.Logger.ErrorContext(ctx, e.Name+": Failed to report error for job", logAttrs...)
+		e.Logger.WErrorC(ctx, werror.Wrap(err, e.Name+": Failed to report error for job").Add("job_id", e.JobRow.ID))
 	}
 }

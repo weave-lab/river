@@ -14,6 +14,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"weavelab.xyz/monorail/shared/wlib/wlog"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -173,14 +174,14 @@ func DrainContinuously[T any](drainChan <-chan T) func() []T {
 }
 
 // Logger returns a logger suitable for use in tests.
-func Logger(tb testing.TB) *slog.Logger {
+func Logger(tb testing.TB) *wlog.WLogger {
 	tb.Helper()
 	return slogtest.NewLogger(tb, nil)
 }
 
 // Logger returns a logger suitable for use in tests which outputs only at warn
 // or above. Useful in tests where particularly noisy log output is expected.
-func LoggerWarn(tb testing.TB) *slog.Logger {
+func LoggerWarn(tb testing.TB) *wlog.WLogger {
 	tb.Helper()
 	return slogtest.NewLogger(tb, &slog.HandlerOptions{Level: slog.LevelWarn})
 }

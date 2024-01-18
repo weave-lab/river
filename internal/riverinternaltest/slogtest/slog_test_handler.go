@@ -7,24 +7,15 @@ import (
 	"log/slog"
 	"sync"
 	"testing"
+	"weavelab.xyz/monorail/shared/wlib/wlog"
 )
 
 // NewLogger returns a new slog text logger that outputs to `t.Log`. This helps
 // keep test output better formatted, and allows it to be differentiated in case
 // of a failure during a parallel test suite run.
-func NewLogger(tb testing.TB, opts *slog.HandlerOptions) *slog.Logger {
+func NewLogger(tb testing.TB, opts *slog.HandlerOptions) *wlog.WLogger {
 	tb.Helper()
-
-	var buf bytes.Buffer
-
-	textHandler := slog.NewTextHandler(&buf, opts)
-
-	return slog.New(&slogTestHandler{
-		buf:   &buf,
-		inner: textHandler,
-		mu:    &sync.Mutex{},
-		tb:    tb,
-	})
+	return wlog.NewWLogger(wlog.WlogdLogger)
 }
 
 type slogTestHandler struct {

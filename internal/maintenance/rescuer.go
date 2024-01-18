@@ -5,8 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"time"
+	"weavelab.xyz/monorail/shared/wlib/werror"
+	"weavelab.xyz/monorail/shared/wlib/wlog/tag"
 
 	"weavelab.xyz/river/internal/baseservice"
 	"weavelab.xyz/river/internal/dbsqlc"
@@ -116,8 +117,8 @@ func (s *Rescuer) Start(ctx context.Context) error {
 		// races.
 		defer close(stopped)
 
-		s.Logger.InfoContext(ctx, s.Name+logPrefixRunLoopStarted)
-		defer s.Logger.InfoContext(ctx, s.Name+logPrefixRunLoopStopped)
+		s.Logger.InfoC(ctx, s.Name+logPrefixRunLoopStarted)
+		defer s.Logger.InfoC(ctx, s.Name+logPrefixRunLoopStopped)
 
 		ticker := timeutil.NewTickerWithInitialTick(ctx, s.Config.Interval)
 		for {
@@ -130,14 +131,14 @@ func (s *Rescuer) Start(ctx context.Context) error {
 			res, err := s.runOnce(ctx)
 			if err != nil {
 				if !errors.Is(err, context.Canceled) {
-					s.Logger.ErrorContext(ctx, s.Name+": Error rescuing jobs", slog.String("error", err.Error()))
+					s.Logger.InfoC(ctx, s.Name+": Error rescuing jobs", tag.String("error", err.Error()))
 				}
 				continue
 			}
 
-			s.Logger.InfoContext(ctx, s.Name+logPrefixRanSuccessfully,
-				slog.Int64("num_jobs_discarded", res.NumJobsDiscarded),
-				slog.Int64("num_jobs_retry_scheduled", res.NumJobsRetried),
+			s.Logger.InfoC(ctx, s.Name+logPrefixRanSuccessfully,
+				tag.Int64("num_jobs_discarded", res.NumJobsDiscarded),
+				tag.Int64("num_jobs_retry_scheduled", res.NumJobsRetried),
 			)
 		}
 	}()
@@ -227,9 +228,9 @@ func (s *Rescuer) runOnce(ctx context.Context) (*rescuerRunOnceResult, error) {
 			break
 		}
 
-		s.Logger.InfoContext(ctx, s.Name+": Rescued batch of jobs",
-			slog.Int64("num_jobs_discarded", res.NumJobsDiscarded),
-			slog.Int64("num_jobs_retried", res.NumJobsRetried),
+		s.Logger.InfoC(ctx, s.Name+": Rescued batch of jobs",
+			tag.Int64("num_jobs_discarded", res.NumJobsDiscarded),
+			tag.Int64("num_jobs_retried", res.NumJobsRetried),
 		)
 
 		s.CancellableSleepRandomBetween(ctx, BatchBackoffMin, BatchBackoffMax)
@@ -257,15 +258,13 @@ func (s *Rescuer) makeRetryDecision(ctx context.Context, internalJob *dbsqlc.Riv
 
 	workUnitFactory := s.Config.WorkUnitFactoryFunc(job.Kind)
 	if workUnitFactory == nil {
-		s.Logger.ErrorContext(ctx, s.Name+": Attempted to rescue unhandled job kind, discarding",
-			slog.String("job_kind", job.Kind), slog.Int64("job_id", job.ID))
+		s.Logger.WErrorC(ctx, werror.New(s.Name+": Attempted to rescue unhandled job kind, discarding").Add("job_kind", job.Kind).Add("job_id", job.ID))
 		return false, time.Time{}
 	}
 
 	workUnit := workUnitFactory.MakeUnit(job)
 	if err := workUnit.UnmarshalJob(); err != nil {
-		s.Logger.ErrorContext(ctx, s.Name+": Error unmarshaling job args: %s"+err.Error(),
-			slog.String("job_kind", job.Kind), slog.Int64("job_id", job.ID))
+		s.Logger.WErrorC(ctx, werror.Wrap(err, s.Name+": Attempted to rescue unhandled job kind, discarding").Add("job_kind", job.Kind).Add("job_id", job.ID))
 	}
 
 	nextRetry := workUnit.NextRetry()

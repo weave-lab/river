@@ -4,8 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"time"
+	"weavelab.xyz/monorail/shared/wlib/werror"
+	"weavelab.xyz/monorail/shared/wlib/wlog/tag"
 
 	"weavelab.xyz/river/internal/baseservice"
 	"weavelab.xyz/river/internal/dbsqlc"
@@ -111,8 +112,8 @@ func (s *JobCleaner) Start(ctx context.Context) error { //nolint:dupl
 		// races.
 		defer close(stopped)
 
-		s.Logger.InfoContext(ctx, s.Name+logPrefixRunLoopStarted)
-		defer s.Logger.InfoContext(ctx, s.Name+logPrefixRunLoopStopped)
+		s.Logger.InfoC(ctx, s.Name+logPrefixRunLoopStarted)
+		defer s.Logger.InfoC(ctx, s.Name+logPrefixRunLoopStopped)
 
 		ticker := timeutil.NewTickerWithInitialTick(ctx, s.Config.Interval)
 		for {
@@ -125,13 +126,13 @@ func (s *JobCleaner) Start(ctx context.Context) error { //nolint:dupl
 			res, err := s.runOnce(ctx)
 			if err != nil {
 				if !errors.Is(err, context.Canceled) {
-					s.Logger.ErrorContext(ctx, s.Name+": Error cleaning jobs", slog.String("error", err.Error()))
+					s.Logger.WErrorC(ctx, werror.Wrap(err, s.Name+": Error cleaning jobs"))
 				}
 				continue
 			}
 
-			s.Logger.InfoContext(ctx, s.Name+logPrefixRanSuccessfully,
-				slog.Int64("num_jobs_deleted", res.NumJobsDeleted),
+			s.Logger.InfoC(ctx, s.Name+logPrefixRanSuccessfully,
+				tag.Int64("num_jobs_deleted", res.NumJobsDeleted),
 			)
 		}
 	}()
@@ -176,8 +177,8 @@ func (s *JobCleaner) runOnce(ctx context.Context) (*jobCleanerRunOnceResult, err
 			break
 		}
 
-		s.Logger.InfoContext(ctx, s.Name+": Deleted batch of jobs",
-			slog.Int64("num_jobs_deleted", numDeleted),
+		s.Logger.InfoC(ctx, s.Name+": Deleted batch of jobs",
+			tag.Int64("num_jobs_deleted", numDeleted),
 		)
 
 		s.CancellableSleepRandomBetween(ctx, BatchBackoffMin, BatchBackoffMax)

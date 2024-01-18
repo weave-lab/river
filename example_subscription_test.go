@@ -4,15 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"time"
+	"weavelab.xyz/monorail/shared/wlib/wlog"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"weavelab.xyz/river"
 	"weavelab.xyz/river/internal/rivercommon"
 	"weavelab.xyz/river/internal/riverinternaltest"
-	"weavelab.xyz/river/internal/util/slogutil"
 	"weavelab.xyz/river/riverdriver/riverpgxv5"
 )
 
@@ -57,7 +56,7 @@ func Example_subscription() {
 	river.AddWorker(workers, &SubscriptionWorker{})
 
 	riverClient, err := river.NewClient(riverpgxv5.New(dbPool), &river.Config{
-		Logger: slog.New(&slogutil.SlogMessageOnlyHandler{Level: 9}), // Suppress logging so example output is cleaner (9 > slog.LevelError).
+		Logger: wlog.Logger(), // Suppress logging so example output is cleaner (9 > slog.LevelError).
 		Queues: map[string]river.QueueConfig{
 			river.QueueDefault: {MaxWorkers: 100},
 		},

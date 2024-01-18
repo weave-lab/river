@@ -8,13 +8,13 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"log/slog"
 	"maps"
-	"os"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
+	"weavelab.xyz/monorail/shared/wlib/wlog"
+	"weavelab.xyz/monorail/shared/wlib/wlog/tag"
 
 	"weavelab.xyz/river/internal/baseservice"
 	"weavelab.xyz/river/internal/dbsqlc"
@@ -47,7 +47,7 @@ type Config struct {
 	// Logger is the structured logger to use for logging purposes. If none is
 	// specified, logs will be emitted to STDOUT with messages at warn level
 	// or higher.
-	Logger *slog.Logger
+	Logger *wlog.WLogger
 }
 
 // Migrator is a database migration tool for River which can run up or down
@@ -90,9 +90,7 @@ func New[TTx any](driver riverdriver.Driver[TTx], config *Config) *Migrator[TTx]
 
 	logger := config.Logger
 	if logger == nil {
-		logger = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-			Level: slog.LevelWarn,
-		}))
+		logger = wlog.NewWLogger(wlog.WlogdLogger)
 	}
 
 	archetype := &baseservice.Archetype{
@@ -333,7 +331,7 @@ func (m *Migrator[TTx]) applyMigrations(ctx context.Context, exec riverdriver.Ex
 
 	// Short circuit early if there's nothing to do.
 	if len(sortedTargetMigrations) < 1 {
-		m.Logger.InfoContext(ctx, m.Name+": No migrations to apply")
+		m.Logger.InfoC(ctx, m.Name+": No migrations to apply")
 		return res, nil
 	}
 
@@ -343,9 +341,9 @@ func (m *Migrator[TTx]) applyMigrations(ctx context.Context, exec riverdriver.Ex
 			sql = versionBundle.Down
 		}
 
-		m.Logger.InfoContext(ctx, fmt.Sprintf(m.Name+": Applying migration %03d [%s]", versionBundle.Version, strings.ToUpper(string(direction))),
-			slog.String("direction", string(direction)),
-			slog.Int("version", versionBundle.Version),
+		m.Logger.InfoC(ctx, fmt.Sprintf(m.Name+": Applying migration %03d [%s]", versionBundle.Version, strings.ToUpper(string(direction))),
+			tag.String("direction", string(direction)),
+			tag.Int("version", versionBundle.Version),
 		)
 
 		_, err := exec.Exec(ctx, sql)
@@ -359,7 +357,7 @@ func (m *Migrator[TTx]) applyMigrations(ctx context.Context, exec riverdriver.Ex
 
 	// Only prints if more steps than available were requested.
 	if opts.MaxSteps > 0 && len(res.Versions) < opts.MaxSteps {
-		m.Logger.InfoContext(ctx, m.Name+": No more migrations to apply")
+		m.Logger.InfoC(ctx, m.Name+": No more migrations to apply")
 	}
 
 	return res, nil

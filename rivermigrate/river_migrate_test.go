@@ -3,9 +3,9 @@ package rivermigrate
 import (
 	"context"
 	"database/sql"
-	"log/slog"
 	"slices"
 	"testing"
+	"weavelab.xyz/monorail/shared/wlib/wlog"
 
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
@@ -54,7 +54,7 @@ func TestMigrator(t *testing.T) {
 	type testBundle struct {
 		dbPool *pgxpool.Pool
 		driver *riverpgxv5.Driver
-		logger *slog.Logger
+		logger *wlog.WLogger
 		tx     pgx.Tx
 	}
 

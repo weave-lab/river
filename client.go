@@ -6,11 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
-	"os"
 	"regexp"
 	"sync"
 	"time"
+	"weavelab.xyz/monorail/shared/wlib/werror"
+	"weavelab.xyz/monorail/shared/wlib/wlog"
+	"weavelab.xyz/monorail/shared/wlib/wlog/tag"
 
 	"github.com/oklog/ulid/v2"
 
@@ -112,7 +113,7 @@ type Config struct {
 	// Logger is the structured logger to use for logging purposes. If none is
 	// specified, logs will be emitted to STDOUT with messages at warn level
 	// or higher.
-	Logger *slog.Logger
+	Logger *wlog.WLogger
 
 	// PeriodicJobs are a set of periodic jobs to run at the specified intervals
 	// in the client.
@@ -358,9 +359,7 @@ func NewClient[TTx any](driver riverdriver.Driver[TTx], config *Config) (*Client
 
 	logger := config.Logger
 	if logger == nil {
-		logger = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-			Level: slog.LevelWarn,
-		}))
+		logger = wlog.NewWLogger(wlog.WlogdLogger)
 	}
 
 	retryPolicy := config.RetryPolicy
@@ -634,7 +633,7 @@ func (c *Client[TTx]) Start(ctx context.Context) error {
 	c.runProducers(fetchNewWorkCtx, workCtx)
 	go c.signalStopComplete(workCtx)
 
-	c.baseService.Logger.InfoContext(workCtx, "River client successfully started")
+	c.baseService.Logger.InfoC(workCtx, "River client successfully started")
 
 	return nil
 }
@@ -653,7 +652,7 @@ func (c *Client[TTx]) signalStopComplete(ctx context.Context) {
 
 	c.queueMaintainer.Stop()
 
-	c.baseService.Logger.InfoContext(ctx, c.baseService.Name+": All services stopped")
+	c.baseService.Logger.InfoC(ctx, c.baseService.Name+": All services stopped")
 
 	// As of now, the Adapter doesn't have any async behavior, so we don't need
 	// to wait for it to stop.  Once all executors and completers are done, we
@@ -673,7 +672,7 @@ func (c *Client[TTx]) signalStopComplete(ctx context.Context) {
 	// Shut down the monitor last so it can broadcast final status updates:
 	c.monitor.Shutdown()
 
-	c.baseService.Logger.InfoContext(ctx, c.baseService.Name+": Stop complete")
+	c.baseService.Logger.InfoC(ctx, c.baseService.Name+": Stop complete")
 	close(c.stopComplete)
 }
 
@@ -689,7 +688,7 @@ func (c *Client[TTx]) Stop(ctx context.Context) error {
 		return errors.New("client not started")
 	}
 
-	c.baseService.Logger.InfoContext(ctx, c.baseService.Name+": Stop started")
+	c.baseService.Logger.InfoC(ctx, c.baseService.Name+": Stop started")
 	c.fetchNewWorkCancel()
 	return c.awaitStop(ctx)
 }
@@ -714,7 +713,7 @@ func (c *Client[TTx]) awaitStop(ctx context.Context) error {
 // no need to call this method if the context passed to Run is cancelled
 // instead.
 func (c *Client[TTx]) StopAndCancel(ctx context.Context) error {
-	c.baseService.Logger.InfoContext(ctx, c.baseService.Name+": Hard stop started; cancelling all work")
+	c.baseService.Logger.InfoC(ctx, c.baseService.Name+": Hard stop started; cancelling all work")
 	c.fetchNewWorkCancel()
 	c.workCancel()
 	return c.awaitStop(ctx)
@@ -856,11 +855,11 @@ func (c *Client[TTx]) logStatsLoop(ctx context.Context) {
 		c.statsMu.Lock()
 		defer c.statsMu.Unlock()
 
-		c.baseService.Logger.InfoContext(ctx, c.baseService.Name+": Job stats (since last stats line)",
-			"num_jobs_run", c.statsNumJobs,
-			"average_complete_duration", safeDurationAverage(c.statsAggregate.CompleteDuration, c.statsNumJobs),
-			"average_queue_wait_duration", safeDurationAverage(c.statsAggregate.QueueWaitDuration, c.statsNumJobs),
-			"average_run_duration", safeDurationAverage(c.statsAggregate.RunDuration, c.statsNumJobs))
+		c.baseService.Logger.InfoC(ctx, c.baseService.Name+": Job stats (since last stats line)",
+			tag.Int("num_jobs_run", c.statsNumJobs),
+			tag.Duration("average_complete_duration", safeDurationAverage(c.statsAggregate.CompleteDuration, c.statsNumJobs)),
+			tag.Duration("average_queue_wait_duration", safeDurationAverage(c.statsAggregate.QueueWaitDuration, c.statsNumJobs)),
+			tag.Duration("average_run_duration", safeDurationAverage(c.statsAggregate.RunDuration, c.statsNumJobs)))
 
 		c.statsAggregate = jobstats.JobStatistics{}
 		c.statsNumJobs = 0
@@ -881,7 +880,7 @@ func (c *Client[TTx]) logStatsLoop(ctx context.Context) {
 }
 
 func (c *Client[TTx]) handleLeadershipChange(ctx context.Context, notification *leadership.Notification) {
-	c.baseService.Logger.InfoContext(ctx, "Election change received", slog.Bool("is_leader", notification.IsLeader))
+	c.baseService.Logger.InfoC(ctx, "Election change received", tag.Bool("is_leader", notification.IsLeader))
 
 	leaderStatus := componentstatus.ElectorNonLeader
 	if notification.IsLeader {
@@ -892,7 +891,7 @@ func (c *Client[TTx]) handleLeadershipChange(ctx context.Context, notification *
 	switch {
 	case notification.IsLeader:
 		if err := c.queueMaintainer.Start(ctx); err != nil {
-			c.baseService.Logger.ErrorContext(ctx, "Error starting queue maintainer", slog.String("err", err.Error()))
+			c.baseService.Logger.WErrorC(ctx, werror.Wrap(err, "Error starting queue maintainer"))
 		}
 
 		c.testSignals.electedLeader.Signal(struct{}{})

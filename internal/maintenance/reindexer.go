@@ -3,8 +3,9 @@ package maintenance
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"time"
+	"weavelab.xyz/monorail/shared/wlib/werror"
+	"weavelab.xyz/monorail/shared/wlib/wlog/tag"
 
 	"weavelab.xyz/river/internal/baseservice"
 	"weavelab.xyz/river/internal/maintenance/startstop"
@@ -104,8 +105,8 @@ func (s *Reindexer) Start(ctx context.Context) error {
 		// races.
 		defer close(stopped)
 
-		s.Logger.InfoContext(ctx, s.Name+logPrefixRunLoopStarted)
-		defer s.Logger.InfoContext(ctx, s.Name+logPrefixRunLoopStopped)
+		s.Logger.InfoC(ctx, s.Name+logPrefixRunLoopStarted)
+		defer s.Logger.InfoC(ctx, s.Name+logPrefixRunLoopStopped)
 
 		// On each run, we calculate the new schedule based on the previous run's
 		// start time. This ensures that we don't accidentally skip a run as time
@@ -127,14 +128,14 @@ func (s *Reindexer) Start(ctx context.Context) error {
 			for _, indexName := range s.Config.IndexNames {
 				if err := s.reindexOne(ctx, indexName); err != nil {
 					if !errors.Is(err, context.Canceled) {
-						s.Logger.ErrorContext(ctx, s.Name+": Error reindexing", slog.String("error", err.Error()), slog.String("index_name", indexName))
+						s.Logger.WErrorC(ctx, werror.Wrap(err, s.Name+": Error reindexing").Add("index_name", indexName))
 					}
 					continue
 				}
 				s.TestSignals.Reindexed.Signal(struct{}{})
 			}
 			// TODO: maybe we should log differently if some of these fail?
-			s.Logger.InfoContext(ctx, s.Name+logPrefixRanSuccessfully, slog.Int("num_reindexes_initiated", len(s.Config.IndexNames)))
+			s.Logger.InfoC(ctx, s.Name+logPrefixRanSuccessfully, tag.Int("num_reindexes_initiated", len(s.Config.IndexNames)))
 		}
 	}()
 
@@ -150,7 +151,7 @@ func (s *Reindexer) reindexOne(ctx context.Context, indexName string) error {
 		return err
 	}
 
-	s.Logger.InfoContext(ctx, s.Name+": Initiated reindex", slog.String("index_name", indexName))
+	s.Logger.InfoC(ctx, s.Name+": Initiated reindex", tag.String("index_name", indexName))
 	return nil
 }
 

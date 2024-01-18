@@ -7,11 +7,11 @@ package baseservice
 
 import (
 	"context"
-	"log/slog"
 	"math/rand"
 	"reflect"
 	"time"
 
+	"weavelab.xyz/monorail/shared/wlib/wlog"
 	"weavelab.xyz/river/internal/util/randutil"
 )
 
@@ -29,7 +29,7 @@ type Archetype struct {
 	DisableSleep bool
 
 	// Logger is a structured logger.
-	Logger *slog.Logger
+	Logger *wlog.WLogger
 
 	// TimeNowUTC returns the current time as UTC. Normally it's implemented as
 	// a call to `time.Now().UTC()`, but may be overridden in tests for time

@@ -4,14 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"strconv"
 	"sync"
 	"time"
+	"weavelab.xyz/monorail/shared/wlib/wlog/tag"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"weavelab.xyz/monorail/shared/wlib/wlog"
 	"weavelab.xyz/river/internal/baseservice"
 	"weavelab.xyz/river/internal/componentstatus"
 )
@@ -54,7 +55,7 @@ type Notifier struct {
 	connConfig       *pgx.ConnConfig
 	notificationBuf  chan *pgconn.Notification
 	statusChangeFunc func(componentstatus.Status)
-	logger           *slog.Logger
+	logger           *wlog.WLogger
 
 	mu           sync.Mutex
 	isConnActive bool
@@ -62,7 +63,7 @@ type Notifier struct {
 	subChangeCh  chan *subscriptionChange
 }
 
-func New(archetype *baseservice.Archetype, connConfig *pgx.ConnConfig, statusChangeFunc func(componentstatus.Status), logger *slog.Logger) *Notifier {
+func New(archetype *baseservice.Archetype, connConfig *pgx.ConnConfig, statusChangeFunc func(componentstatus.Status), logger *wlog.WLogger) *Notifier {
 	copiedConfig := connConfig.Copy()
 	// Rely on an overall statement timeout instead of setting identical context timeouts on every query:
 	copiedConfig.RuntimeParams["statement_timeout"] = strconv.Itoa(int(statementTimeout.Milliseconds()))
@@ -70,7 +71,7 @@ func New(archetype *baseservice.Archetype, connConfig *pgx.ConnConfig, statusCha
 		connConfig:       copiedConfig,
 		notificationBuf:  make(chan *pgconn.Notification, 1000),
 		statusChangeFunc: statusChangeFunc,
-		logger:           logger.WithGroup("notifier"),
+		logger:           logger,
 
 		subs:        make(map[NotificationTopic][]*Subscription),
 		subChangeCh: make(chan *subscriptionChange, 1000),
@@ -145,9 +146,9 @@ func (n *Notifier) getConnAndRun(ctx context.Context) {
 		// would otherwise pollute output and fail the test.
 		select {
 		case <-ctx.Done():
-			n.logger.Info("error establishing connection from pool", "err", err)
+			n.logger.Info("error establishing connection from pool", tag.String("err", err.Error()))
 		default:
-			n.logger.Error("error establishing connection from pool", "err", err)
+			n.logger.Error("error establishing connection from pool", tag.String("err", err.Error()))
 		}
 		return
 	}
@@ -211,7 +212,7 @@ func (n *Notifier) runOnce(ctx context.Context, conn *pgx.Conn) error {
 		err := <-errCh
 		if err != nil && !errors.Is(err, context.Canceled) {
 			// A non-cancel error means something went wrong with the conn, so we should bail.
-			n.logger.Error("error on draining notification wait", "err", err)
+			n.logger.Error("error on draining notification wait", tag.String("err", err.Error()))
 			return err
 		}
 		// If we got a context cancellation error, it means we successfully
@@ -243,7 +244,7 @@ func (n *Notifier) runOnce(ctx context.Context, conn *pgx.Conn) error {
 			return nil
 		}
 		if err != nil {
-			n.logger.Error("error from notification wait", "err", err)
+			n.logger.Error("error from notification wait", tag.String("err", err.Error()))
 			return err
 		}
 	case subChange := <-n.subChangeCh:
@@ -313,7 +314,7 @@ func (n *Notifier) handleNotification(conn *pgconn.PgConn, notification *pgconn.
 	select {
 	case n.notificationBuf <- notification:
 	default:
-		n.logger.Warn("dropping notification due to full buffer", "payload", notification.Payload)
+		n.logger.WarnC(context.Background(), "dropping notification due to full buffer", tag.String("payload", notification.Payload))
 	}
 }
 

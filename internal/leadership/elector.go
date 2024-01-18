@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log/slog"
 	"sync"
 	"time"
+	"weavelab.xyz/monorail/shared/wlib/wlog"
+	"weavelab.xyz/monorail/shared/wlib/wlog/tag"
 
 	"weavelab.xyz/river/internal/dbadapter"
 	"weavelab.xyz/river/internal/notifier"
@@ -47,7 +48,7 @@ type Elector struct {
 	interval time.Duration
 	name     string
 	notifier *notifier.Notifier
-	logger   *slog.Logger
+	logger   *wlog.WLogger
 
 	mu            sync.Mutex
 	isLeader      bool
@@ -57,7 +58,7 @@ type Elector struct {
 // NewElector returns an Elector using the given adapter. The name should correspond
 // to the name of the database + schema combo and should be shared across all Clients
 // running with that combination. The id should be unique to the Client.
-func NewElector(adapter dbadapter.Adapter, notifier *notifier.Notifier, name, id string, interval time.Duration, logger *slog.Logger) (*Elector, error) {
+func NewElector(adapter dbadapter.Adapter, notifier *notifier.Notifier, name, id string, interval time.Duration, logger *wlog.WLogger) (*Elector, error) {
 	// TODO: validate name + id length/format, interval, etc
 	return &Elector{
 		adapter:  adapter,
@@ -65,7 +66,7 @@ func NewElector(adapter dbadapter.Adapter, notifier *notifier.Notifier, name, id
 		interval: interval,
 		name:     name,
 		notifier: notifier,
-		logger:   logger.WithGroup("elector"),
+		logger:   logger,
 	}, nil
 }
 
@@ -84,12 +85,12 @@ func (e *Elector) Run(ctx context.Context) {
 	handleNotification := func(topic notifier.NotificationTopic, payload string) {
 		if topic != notifier.NotificationTopicLeadership {
 			// This should not happen unless the notifier is broken.
-			e.logger.Error("received unexpected notification", "topic", topic, "payload", payload)
+			e.logger.Error("received unexpected notification", tag.Any("topic", topic), tag.String("payload", payload))
 			return
 		}
 		notification := pgNotification{}
 		if err := json.Unmarshal([]byte(payload), &notification); err != nil {
-			e.logger.Error("unable to unmarshal leadership notification", "err", err)
+			e.logger.Error("unable to unmarshal leadership notification", tag.String("err", err.Error()))
 			return
 		}
 
@@ -133,7 +134,7 @@ func (e *Elector) Run(ctx context.Context) {
 				return
 			default:
 				// TODO: backoff
-				e.logger.Error("error keeping leadership", "err", err)
+				e.logger.Error("error keeping leadership", tag.String("err", err.Error()))
 				continue
 			}
 		}
@@ -144,7 +145,7 @@ func (e *Elector) gainLeadership(ctx context.Context, leadershipNotificationChan
 	for {
 		success, err := e.attemptElect(ctx)
 		if err != nil && !errors.Is(err, context.Canceled) {
-			e.logger.Error("error attempting to elect", "err", err)
+			e.logger.Error("error attempting to elect", tag.String("err", err.Error()))
 		}
 		if success {
 			return true
@@ -198,7 +199,7 @@ func (e *Elector) keepLeadership(ctx context.Context, leadershipNotificationChan
 				if reelectionErrCount > 5 {
 					return err
 				}
-				e.logger.Error("error attempting reelection", "err", err)
+				e.logger.Error("error attempting reelection", tag.String("err", err.Error()))
 				continue
 			}
 			if !reelected {
@@ -213,7 +214,7 @@ func (e *Elector) keepLeadership(ctx context.Context, leadershipNotificationChan
 func (e *Elector) giveUpLeadership() {
 	for i := 0; i < 10; i++ {
 		if err := e.attemptResign(i); err != nil {
-			e.logger.Error("error attempting to resign", "err", err)
+			e.logger.Error("error attempting to resign", tag.String("err", err.Error()))
 			// TODO: exponential backoff? wait longer than ~1s total?
 			time.Sleep(100 * time.Millisecond)
 			continue

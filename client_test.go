@@ -2993,7 +2993,7 @@ func Test_NewClient_Validations(t *testing.T) {
 			client, err := NewClient(riverpgxv5.New(dbPool), config)
 			if tt.wantErr != nil {
 				require.Error(err)
-				require.ErrorContains(err, tt.wantErr.Error())
+				require.WErrorContains(err, tt.wantErr.Error())
 				return
 			}
 			require.NoError(err)
@@ -3157,7 +3157,7 @@ func TestInsertParamsFromJobArgsAndOptions(t *testing.T) {
 		t.Parallel()
 
 		insertParams, err := insertParamsFromArgsAndOptions(noOpArgs{}, &InsertOpts{Priority: 5})
-		require.ErrorContains(t, err, "priority must be between 1 and 4")
+		require.WErrorContains(t, err, "priority must be between 1 and 4")
 		require.Nil(t, insertParams)
 	})
 
